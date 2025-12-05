@@ -1,1 +1,43 @@
 
+name: Convert logos to BMP
+
+on:
+  push:
+    paths:
+      - "source-logos/**"
+      - ".github/scripts/convert_to_bmp.py"
+      - ".github/workflows/convert-logos.yml"
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Pillow
+        run: |
+          python -m pip install --upgrade pip
+          pip install pillow
+
+      - name: Convert images to BMP
+        run: |
+          python .github/scripts/convert_to_bmp.py
+
+      - name: Commit generated BMPs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add logos || echo "Rien à ajouter"
+          if ! git diff --cached --quiet; then
+            git commit -m "Generate BMP logos"
+            git push
+          else
+            echo "Aucun changement à committer"
