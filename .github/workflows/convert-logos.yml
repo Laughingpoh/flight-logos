@@ -8,6 +8,10 @@ on:
       - ".github/workflows/convert-logos.yml"
   workflow_dispatch:
 
+# IMPORTANT : permet à github-actions[bot] de faire git push
+permissions:
+  contents: write
+
 jobs:
   convert:
     runs-on: ubuntu-latest
