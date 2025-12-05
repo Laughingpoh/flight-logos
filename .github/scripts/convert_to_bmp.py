@@ -1,52 +1,52 @@
-import os
 from pathlib import Path
 from PIL import Image
 
-# Dossiers source (PNG/JPG/etc.) et destination (BMP)
 SRC_DIR = Path("source-logos")
 DST_DIR = Path("logos")
+TARGET_SIZE = 16  # Taille des logos pour l’écran Matrix Portal S3
 
-# Taille cible optionnelle (None = ne pas redimensionner)
-# Si tu veux que tout tienne dans ~16 px de haut sur ta matrice :
-TARGET_HEIGHT = 16
+DST_DIR.mkdir(exist_ok=True)
 
-# Extensions d'entrée acceptées
-VALID_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+print("Conversion des logos vers BMP 8-bit palette...")
 
+for src in SRC_DIR.iterdir():
+    if not src.is_file():
+        continue
 
-def convert_one(src_path: Path, dst_path: Path):
-    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        img = Image.open(src).convert("RGBA")
+    except Exception as e:
+        print("❌ Erreur ouverture", src, ":", e)
+        continue
 
-    img = Image.open(src_path).convert("RGB")  # BMP = pas de transparence
+    w, h = img.size
 
-    if TARGET_HEIGHT is not None:
-        w, h = img.size
-        if h != TARGET_HEIGHT:
-            new_w = int(w * TARGET_HEIGHT / h)
-            img = img.resize((new_w, TARGET_HEIGHT), Image.LANCZOS)
+    # --- Redimensionnement avec respect du ratio ---
+    scale = TARGET_SIZE / float(max(w, h))
+    new_w = max(1, int(w * scale))
+    new_h = max(1, int(h * scale))
+    img = img.resize((new_w, new_h), Image.LANCZOS)
 
-    # Forcer BMP
-    dst_path = dst_path.with_suffix(".bmp")
-    img.save(dst_path, format="BMP")
-    print(f"Converti: {src_path} -> {dst_path}")
+    # --- Création image carrée 16×16 ---
+    bg = Image.new("RGBA", (TARGET_SIZE, TARGET_SIZE), (0, 0, 0, 0))
 
+    # Centrage
+    offset_x = (TARGET_SIZE - new_w) // 2
+    offset_y = (TARGET_SIZE - new_h) // 2
+    bg.paste(img, (offset_x, offset_y), img)
 
-def main():
-    if not SRC_DIR.exists():
-        print(f"{SRC_DIR} n'existe pas, rien à faire.")
-        return
+    # --- Conversion palette (nécessaire pour CircuitPython) ---
+    # 64 couleurs = largement suffisant pour des logos 16×16
+    pal = bg.convert("P", palette=Image.ADAPTIVE, colors=64)
 
-    for root, dirs, files in os.walk(SRC_DIR):
-        for name in files:
-            if not name.lower().endswith(VALID_EXT):
-                continue
+    # --- Nom de sortie en UPPERCASE pour correspondre aux ICAO/IATA ---
+    dst_name = src.stem.upper() + ".bmp"
+    dst_path = DST_DIR / dst_name
 
-            src_path = Path(root) / name
-            rel = src_path.relative_to(SRC_DIR)
-            dst_path = DST_DIR / rel
+    try:
+        pal.save(dst_path, format="BMP")
+        print(f"✅ {src.name} → {dst_name}")
+    except Exception as e:
+        print("❌ Erreur sauvegarde", dst_path, ":", e)
 
-            convert_one(src_path, dst_path)
-
-
-if __name__ == "__main__":
-    main()
+print("Terminé 👍")
